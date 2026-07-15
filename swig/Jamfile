@@ -1,5 +1,6 @@
 import os ;
 import feature : feature ;
+import testing ;
 
 BOOST_ROOT = [ os.environ BOOST_ROOT ] ;
 ECHO "BOOST_ROOT = "$(BOOST_ROOT) ;
@@ -53,6 +54,8 @@ lib torrent4j
 
     : # sources
 	 libtorrent_jni.cpp
+	 flow_saf_storage.cpp
+	 flow_saf_disk_io.cpp
 
     : # requirements
     <conditional>@libtorrent_linking
@@ -64,3 +67,22 @@ lib torrent4j
     : # usage-requirements
     <include>.
     ;
+
+run
+    test/flow_saf_disk_io_test.cpp
+    flow_saf_storage.cpp
+    flow_saf_disk_io.cpp
+    :
+    :
+    : <library>/torrent//torrent/<link>static
+      <include>.
+      <deprecated-functions>4
+      <crypto>built-in
+      <webtorrent>off
+      <dht>off
+      <logging>off
+      <cxxstd>17
+      <threading>multi
+    : flow_saf_disk_io_test
+    ;
+explicit flow_saf_disk_io_test ;

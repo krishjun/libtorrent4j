@@ -45,6 +45,11 @@ namespace libtorrent
     {
         $self->disk_io_constructor = lt::default_disk_io_constructor;
     }
+
+    void set_flow_saf_disk_io_constructor(flow_saf_storage* bridge)
+    {
+        flow_set_saf_disk_io_constructor(*$self, bridge);
+    }
 }
 
 }

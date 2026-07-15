@@ -106,6 +106,8 @@ using queue_position_t = libtorrent::queue_position_t;
 
 #include "libtorrent.hpp"
 
+#include "flow_saf_storage.hpp"
+
 template <typename IndexType>
 using typed_bitfield = libtorrent::typed_bitfield<IndexType>;
 
@@ -317,6 +319,7 @@ TYPE_INTEGRAL_CONVERSION(queue_position_t, int, int)
 %include "libtorrent/peer_class_type_filter.i"
 %include "libtorrent/ip_filter.i"
 %include "libtorrent/session_types.i"
+%include "libtorrent/flow_saf_storage.i"
 %include "libtorrent/session_params.i"
 %include "libtorrent/session_handle.i"
 %include "libtorrent/session.i"
