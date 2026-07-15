@@ -20,6 +20,7 @@ A swig Java interface for [libtorrent](https://github.com/arvidn/libtorrent).
 | HTTP proxies and basic authentication | |
 | IP filter | |
 | Torrents over SSL |  |
+| Android Storage Access Framework (SAF) disk backend | Fork release `v2.1.0-39-saf.1` |
 | `lt_donthave` extension | [BEP 54](https://www.bittorrent.org/beps/bep_0054.html) |
 | Magnet URI extension - specify indices to download | [BEP 53](https://www.bittorrent.org/beps/bep_0053.html) |
 | BitTorrent Protocol v2 | [BEP 52](https://www.bittorrent.org/beps/bep_0052.html) |
@@ -84,6 +85,78 @@ Architectures supported:
 - macOS (arm64)
 - Linux (x86_64)
 - Windows (x86_64)
+
+## Android Storage Access Framework (SAF)
+
+This fork supports downloading directly into an Android Storage Access Framework
+document tree. SAF support is available starting with
+`v2.1.0-39-saf.1`, which is based on upstream libtorrent4j `v2.1.0-39`.
+The feature is fork-specific and is not included in the upstream Maven Central
+artifacts.
+
+The SAF backend is intended for Android API 24 and newer and has been verified
+for `armeabi-v7a`, `arm64-v8a`, `x86`, and `x86_64`. Build the core JAR and
+the Android ABI JARs from this tag; do not combine the Java classes from this
+fork with native libraries from upstream or another version.
+
+### Integration outline
+
+1. Let the user select a directory with `ACTION_OPEN_DOCUMENT_TREE` and persist
+   both the read and write URI permissions.
+2. Implement `org.libtorrent4j.swig.flow_saf_storage` using
+   `ContentResolver`, `DocumentsContract`, or `DocumentFile` beneath that tree.
+3. Install the bridge on `SessionParams` before starting `SessionManager`.
+4. Keep the bridge strongly reachable for the complete native session lifetime.
+5. Stop the session before calling `delete()` on the bridge.
+
+```kotlin
+val storageBridge = AndroidSafStorageBridge(contentResolver, persistedTreeUri)
+val params = SessionParams()
+
+params.swig().set_flow_saf_disk_io_constructor(storageBridge)
+
+val sessionManager = SessionManager()
+sessionManager.start(params)
+
+// Keep storageBridge alive while sessionManager is running.
+// During shutdown:
+sessionManager.stop()
+storageBridge.delete()
+```
+
+Use `.flow-session-root` as the torrent save-path sentinel when the selected SAF
+tree itself is the download root. All paths delivered to the bridge are UTF-8,
+forward-slash-separated relative paths beneath that root. Reject empty
+components, `.` and `..`, backslashes, absolute paths, and any path that could
+escape the granted tree.
+
+### Bridge callback contract
+
+| Callback | Contract |
+|---|---|
+| `validate_path(path)` | Pure validation only; do not perform provider I/O. Return `0` or a negative POSIX errno. |
+| `create_directory(path)` | Create the relative directory and any provider state required for it. |
+| `open_file(path, mode)` | Return a seekable file descriptor. Mode `0` is read-only and mode `2` is read/write. Return a negative errno on failure. |
+| `file_size(path)` | Return the size in bytes, or a negative errno. |
+| `rename(oldPath, newPath)` | Rename or move within the granted tree without allowing traversal outside it. |
+| `remove(path, recursive)` | Delete a file or directory; honor `recursive` for directory trees. |
+
+For `open_file`, detach the descriptor from `ParcelFileDescriptor` before
+returning it, for example with `detachFd()`. Ownership then transfers to the
+native disk backend, which closes the descriptor. The descriptor must support
+`pread`, `pwrite`, and `ftruncate`; cloud-only providers that do not expose a
+seekable descriptor are not compatible.
+
+Provider callbacks run on libtorrent's disk worker thread, not the Android main
+thread. Convert provider exceptions into negative errno values such as
+`-ENOENT`, `-EACCES`, `-ENOSPC`, or `-EIO`. A revoked URI permission should be
+treated as a storage failure: stop or pause affected torrents, request the tree
+grant again, rebuild the bridge, and start a new native session.
+
+This source tag does not imply publication to Maven Central. Applications can
+consume locally built JARs with Gradle `files(...)` dependencies or publish the
+matching artifacts to their own Maven repository. Package all required Android
+ABI JARs in the APK or restrict the APK's ABI filters accordingly.
 
 #### About stability
 
